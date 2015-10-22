@@ -7,7 +7,7 @@ output: html_document
 
 #Introduction
 One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify *how well they do it*. In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of our project is to predict the manner in which they did the exercise, the "classe" variable in the training set. 
-More information is available from the website [here]: (http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset)=.
+More information is available from the website here: (http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset)=.
 The training data for this project are available here: 
 https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
 The test data are available here: 
@@ -15,26 +15,27 @@ https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
 
 #Data Pre-Processing
 ##Load required libraries
+Let's first load the needed Libraries :
 ```{r, message=FALSE, warning=FALSE, comment=FALSE}
 library(caret)
 library(rpart)
 library(rpart.plot)
-#library(rattle)
 library(randomForest)
 library(corrplot)
 library(utils)
 ```
 
 ##Download the Data
-```{r Download_data, cache=TRUE}
+Then let's download the training and test datasets :
+```{r Download_data, cache=FALSE}
 pathIn <- file.path("./PMLdata")
 trainurl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 testurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 trainfile <- paste(pathIn,"pml-training.csv",sep="/")
 testfile  <- paste(pathIn,"pml-testing.csv",sep="/")
-#if (!file.exists("PML/PMLdata")) {
-  #dir.create("PML/PMLdata")
-#}
+if (!file.exists("PML/PMLdata")) {
+  dir.create("PML/PMLdata")
+}
 if (!file.exists(trainfile)) {
   download.file(trainurl, destfile=trainfile)
 }
@@ -44,17 +45,15 @@ if (!file.exists(testfile)) {
 ```
 
 ##Read the Data
-Let's put the data in two dataframes, and get the respective number of entries and variables :
+Let's put the data in two dataframes, and evaluate the respective number of entries and variables :
 ```{r Read_data, message=FALSE, warning=FALSE}
 traindata <- read.csv(trainfile)
 testdata <- read.csv(testfile)
-dim(traindata)
-dim(testdata)
 ```
-The training data set contains `r dim(traindata)[1]` observations and `r dim(traindata)[2]` variables; the testing data set contains `r dim(testdata)[1]` observations and `r dim(testdata)[2]` variables. The “classe” variable is the outcome we want to predict.
+The training data set contains at this stage `r dim(traindata)[1]` observations and `r dim(traindata)[2]` variables; the testing data set contains `r dim(testdata)[1]` observations and `r dim(testdata)[2]` variables. The "classe" variable is the outcome we want to predict.
 
 ##Clean the Data
-There are missing and empty values we want to remove from the datasets :
+Let's clean the datasets. There are missing and empty values we want to remove from the datasets :
 ```{r Clean_data, message=FALSE, warning=FALSE}
 traindata[traindata==""] <- NA
 testdata[testdata==""] <- NA
@@ -65,17 +64,13 @@ trainRemove <- grepl("^X|timestamp|window", names(traindata))
 traindata <- traindata[, !trainRemove]
 testRemove <- grepl("^X|timestamp|window", names(testdata))
 testdata <- testdata[, !testRemove]
-
-#traindata <- traindata[, sapply(traindata, is.numeric)]
-#testdata <- testdata[, sapply(testdata, is.numeric)]
 ```
-This drastically reducing the number of variables down to `r dim(traindata)[2]`, and will significantly improve performances of models performed in the next steps.
-
+This operation drastically reduces the number of variables down to `r dim(traindata)[2]`. This will significantly improve the speed performances of models performed in the next steps of the analysis
 
 ##Split the Data
-Let's create a 70/30 partition from the training data for cross-validation purpose : 
+Let's create a **70/30 partition** from the training data for cross-validation purpose : 
 ```{r Split_data, message=FALSE, warning=FALSE}
-set.seed(1234) # For reproducibility purpose
+set.seed(12345) # For reproducibility purpose
 inTrain <- createDataPartition(traindata$classe, p=0.70, list=F)
 traindata <- traindata[inTrain, ]
 probedata <- traindata[-inTrain, ]
@@ -83,7 +78,7 @@ probedata <- traindata[-inTrain, ]
 
 
 #Data Modeling
-To improve the reliability of our study, we will here compare the results from the *Tree Model* and from the *Random Forest Model*, and then choose the best one.
+To improve the reliability of our study, we will here compare the results from a *Tree Model* and from a *Random Forest Model*, and then choose the best one.
 ##Tree Model
 ```{r Tree_Model, message=FALSE, warning=FALSE}
 treeModel <- train(classe ~ ., data=traindata, method="rpart")
@@ -92,7 +87,7 @@ treeModel
 The respective Tree Plot is provided in the **Appendix** section.
 
 ##Random Forest Model
-We decide to use a 5-fold cross validation when applying the algorithm :
+We decide to use a **5-fold cross** validation when applying the algorithm :
 ```{r RF_Model, message=FALSE, warning=FALSE}
 contRf <- trainControl(method="cv", 5)
 RFModel <- train(classe ~ ., data=traindata, method="rf", trControl=contRf, ntree=250)
@@ -115,7 +110,12 @@ confusionMatrix(probedata$classe, RFPredict)
 confusionMatrix(probedata$classe, RFPredict)$overall[1]
 ```
 
-> From the results above, we can see that **Random Forest Model** is much more reliable than the Tree Model. We decide to keep this one to predict the class from the *Test* dataset.
+> Comparing the accuracy results above, we can see that **Random Forest Model** is much more reliable than the Tree Model. We decide to keep this one to predict the "class" variable" from the *Test* dataset.
+
+```{r RF_eoos, message=FALSE, warning=FALSE}
+1-as.numeric(confusionMatrix(probedata$classe, RFPredict)$overall[1])
+```
+Base upon the accuracy calculated above the the estimated out-of-sample error is `r 1-as.numeric(confusionMatrix(probedata$classe, RFPredict)$overall[1])`.
 
 For information, a plot of the *Top 25* variables is provided in the **Appendix** section.  
 
@@ -125,7 +125,13 @@ predict(RFModel, testdata)
 ```
 
 #Appendix
-```{r Appendix, message=FALSE, warning=FALSE}
+
+##Tree Model Plot
+```{r Appendix_A, message=FALSE, warning=FALSE}
 prp(rpart(classe ~ ., data=traindata, method="class"))
+```
+
+##Top 25 Most Important Variables
+```{r Appendix_B, message=FALSE, warning=FALSE}
 plot(varImp(RFModel), main = "Variable Importance : Top 25", top = 25)
 ```
