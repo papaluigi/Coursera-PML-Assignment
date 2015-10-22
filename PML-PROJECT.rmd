@@ -1,0 +1,124 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "LF GOFFIN"
+date: "21 octobre 2015"
+output: html_document
+---
+
+#Introduction
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of our project is to predict the manner in which they did the exercise, the "classe" variable in the training set. 
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+#Data Pre-Processing
+##Load required libraries
+```{r, message=FALSE, warning=FALSE, comment=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+library(utils)
+```
+
+##Download the Data
+```{r Download_data, cache=TRUE}
+pathIn <- file.path("./PMLdata")
+trainurl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainfile <- paste(pathIn,"pml-training.csv",sep="/")
+testfile  <- paste(pathIn,"pml-testing.csv",sep="/")
+#if (!file.exists("PML/PMLdata")) {
+  #dir.create("PML/PMLdata")
+#}
+if (!file.exists(trainfile)) {
+  download.file(trainurl, destfile=trainfile)
+}
+if (!file.exists(testfile)) {
+  download.file(testurl, destfile=testfile)
+}
+```
+
+##Read the Data
+Let's put the data in two dataframes, and get the respective number of entries and variables :
+```{r Read_data, message=FALSE, warning=FALSE}
+traindata <- read.csv(trainfile)
+testdata <- read.csv(testfile)
+dim(traindata)
+dim(testdata)
+```
+The training data set contains 19622 observations and 160 variables, and the testing data set contains 20 observations and 160 variables. The “classe” variable is the outcome we want to predict.
+
+##Clean the Data
+There are missing and empty values we should remove from the datasets :
+```{r Clean_data, message=FALSE, warning=FALSE}
+traindata[traindata==""] <- NA
+testdata[testdata==""] <- NA
+traindata <- traindata[, colSums(is.na(traindata)) == 0] 
+testdata <- testdata[, colSums(is.na(testdata)) == 0] 
+
+trainRemove <- grepl("^X|timestamp|window", names(traindata))
+traindata <- traindata[, !trainRemove]
+testRemove <- grepl("^X|timestamp|window", names(testdata))
+testdata <- testdata[, !testRemove]
+
+#traindata <- traindata[, sapply(traindata, is.numeric)]
+#testdata <- testdata[, sapply(testdata, is.numeric)]
+```
+
+##Split the Data
+Let's partition the training data for cross-validation purpose : 
+```{r Split_data, message=FALSE, warning=FALSE}
+set.seed(1234) # For reproducibility purpose
+inTrain <- createDataPartition(traindata$classe, p=0.70, list=F)
+traindata <- traindata[inTrain, ]
+probedata <- traindata[-inTrain, ]
+```
+
+
+#Data Modeling
+##Tree Model
+```{r Tree_Model, message=FALSE, warning=FALSE}
+#treeModel <- rpart(classe ~ ., data=traindata, method="class")
+treeModel <- train(classe ~ ., data=traindata, method="rpart")
+treeModel
+#prp(treeModel)
+```
+
+##Random Forest Model
+We fit a predictive model for activity recognition using Random Forest algorithm because it automatically selects important variables and is robust to correlated covariates & outliers in general. We will use 5-fold cross validation when applying the algorithm.
+```{r RF_Model, message=FALSE, warning=FALSE}
+contRf <- trainControl(method="cv", 5)
+#modelRf <- randomForest(classe ~ ., data=traindata)
+RFModel <- train(classe ~ ., data=traindata, method="rf", trControl=contRf, ntree=250)
+RFModel
+plot(varImp(RFModel), main = "Variable Importance : Top 25", top = 25)
+```
+
+#Cross-Validation
+##Tree Model Validation
+```{r Tree_Val, message=FALSE, warning=FALSE}
+treePredict <- predict(treeModel, probedata)
+confusionMatrix(probedata$classe, treePredict)
+```
+
+##Random Forest Model Validation
+```{r RF_Val, message=FALSE, warning=FALSE}
+RFPredict <- predict(RFModel, probedata)
+confusionMatrix(probedata$classe, RFPredict)
+```
+
+#Prediction for Test dataset
+```{r Prediction, message=FALSE, warning=FALSE}
+predict(RFModel, testdata)
+```
+
+#Appendix
+##Tree Model Plot
+```{r Prediction, message=FALSE, warning=FALSE}
+fancyRpartPlot(treemModel$finalModel)
+```
